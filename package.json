@@ -1,0 +1,11 @@
+{
+  "name": "antigravity-zh-cn",
+  "version": "1.0.0",
+  "description": "Simplified Chinese interface patch for the Antigravity App on Windows.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
