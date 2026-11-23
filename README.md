@@ -4,6 +4,10 @@
 
 本仓库提供补丁源码和词库。工具按 SHA-256 识别安装版本，并使用本机的官方 `app.asar` 生成汉化文件。补丁只处理界面文案，AI 回复语言由对话和模型设置决定。
 
+## 实机截图
+
+![Windows 版 Antigravity 2.34.0 汉化实机截图，展示侧边栏与扩展市场](screenshot-zh-cn.jpg)
+
 ## 安装
 
 1. 确认已安装 Windows 版 Antigravity App 2.33.0 或 2.34.0，以及 Node.js 20 或更新版本。
@@ -46,6 +50,16 @@ node .\localize.mjs restore
 node .\localize.mjs build
 node .\localize.mjs build --input 'D:\Backups\app.asar' --output '.\app.asar.zh-cn'
 ```
+
+## 运行测试
+
+使用 Node.js 20 或更新版本，在仓库目录运行以下命令。
+
+```powershell
+npm test
+```
+
+也可以直接运行 `node --test`。测试使用临时目录和合成归档，涵盖版本识别、未知 SHA-256 拒绝以及备份和还原。安装和还原用例在 Windows 上运行。
 
 ## 来源和许可
 
