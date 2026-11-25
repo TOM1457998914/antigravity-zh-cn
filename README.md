@@ -1,6 +1,6 @@
 # Antigravity 简体中文补丁
 
-适用于 Windows 版 **Google Antigravity App 2.33.0 和 2.34.0**。每个版本的补丁覆盖 30 个应用资源，包括菜单、设置、首次使用引导、聊天控件和部分提示。2.34.0 还补齐了首页公告、快捷键说明、模型档位、扩展市场及部分原生弹窗。第三方插件动态提供的部分内容可能仍显示英文。
+适用于 Windows 版 **Google Antigravity App 2.33.0、2.34.0、2.35.0 和 2.35.1**。补丁覆盖菜单、设置、首次使用引导和对话控件。2.35 系列补齐了对话时间、模型档位、新建自动化表单、扩展市场及组合读写权限提示。第三方插件动态提供的部分内容可能仍显示英文。
 
 本仓库提供补丁源码和词库。工具按 SHA-256 识别安装版本，并使用本机的官方 `app.asar` 生成汉化文件。补丁只处理界面文案，AI 回复语言由对话和模型设置决定。
 
@@ -10,7 +10,7 @@
 
 ## 安装
 
-1. 确认已安装 Windows 版 Antigravity App 2.33.0 或 2.34.0，以及 Node.js 20 或更新版本。
+1. 确认已安装上述版本之一的 Windows 版 Antigravity App，以及 Node.js 20 或更新版本。
 2. 下载或克隆仓库，在 PowerShell 中进入 `antigravity-zh-cn` 目录，检查当前安装状态。 [GitHub 仓库](https://github.com/TOM1457998914/antigravity-zh-cn)
 
    ```powershell
@@ -63,5 +63,5 @@ npm test
 
 ## 来源和许可
 
-这是社区维护的界面补丁，在 `antigravity-cn-community/Antigravity-Chinese-Localization` 的 v2.33.0 和 v2.34.0 基础上整理，并保留 aabbWei 和 antigravity-cn-community contributors 的版权声明。补丁源码采用 MIT 许可证。 [上游 v2.33.0](https://github.com/antigravity-cn-community/Antigravity-Chinese-Localization/releases/tag/v2.33.0) · [上游 v2.34.0](https://github.com/antigravity-cn-community/Antigravity-Chinese-Localization/releases/tag/v2.34.0) · [MIT 许可证](LICENSE)
+这是社区维护的界面补丁，在 `antigravity-cn-community/Antigravity-Chinese-Localization` 的 v2.33.0、v2.34.0 和 v2.35.0 基础上整理，并保留 aabbWei 和 antigravity-cn-community contributors 的版权声明。2.35.1 适配以对应版本的官方归档为输入。补丁源码采用 MIT 许可证。 [上游 v2.33.0](https://github.com/antigravity-cn-community/Antigravity-Chinese-Localization/releases/tag/v2.33.0) · [上游 v2.34.0](https://github.com/antigravity-cn-community/Antigravity-Chinese-Localization/releases/tag/v2.34.0) · [上游 v2.35.0](https://github.com/antigravity-cn-community/Antigravity-Chinese-Localization/releases/tag/v2.35.0) · [MIT 许可证](LICENSE)
 

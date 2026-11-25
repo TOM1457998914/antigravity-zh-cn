@@ -88,13 +88,20 @@ export function readAsar(buffer) {
     packed.set(filePath, { filePath, offset, size });
   }
 
-  // Read the payload in its original physical order, including any padding.
-  const ordered = [...packed.values()].sort((a, b) => a.offset - b.offset || a.size - b.size);
+  // Keep exact aliases together so shared payload ranges are read only once.
+  const byOffset = [...packed.values()].sort((a, b) => a.offset - b.offset || a.size - b.size);
+  const ordered = [];
   let end = 0;
-  for (const entry of ordered) {
+  for (const entry of byOffset) {
+    const previous = ordered.at(-1);
+    if (previous?.offset === entry.offset && previous.size === entry.size) {
+      previous.paths.push(entry.filePath);
+      continue;
+    }
     if (entry.offset < end) {
       throw new Error(`Overlapping ASAR file range for ${entry.filePath}`);
     }
+    ordered.push({ offset: entry.offset, size: entry.size, paths: [entry.filePath] });
     end = entry.offset + entry.size;
   }
 
@@ -159,23 +166,27 @@ export function repackAsar(archive, replacements) {
   const parts = [];
   let readOffset = 0;
   let writeOffset = 0;
-  for (const { filePath, offset, size } of original.ordered) {
+  for (const { paths, offset, size } of original.ordered) {
     const gap = original.data.subarray(readOffset, offset);
     parts.push(gap);
     writeOffset += gap.length;
-
-    const metadata = entries.get(filePath);
-    if (offset !== writeOffset) metadata.offset = String(writeOffset);
-    const replacement = changed.get(filePath);
-    if (replacement) {
+    readOffset = offset + size;
+    const originalPaths = paths.filter((filePath) => !changed.has(filePath));
+    if (originalPaths.length) {
+      for (const filePath of originalPaths) entries.get(filePath).offset = String(writeOffset);
+      parts.push(original.data.subarray(offset, readOffset));
+      writeOffset += size;
+    }
+    for (const filePath of paths) {
+      const replacement = changed.get(filePath);
+      if (!replacement) continue;
+      const metadata = entries.get(filePath);
+      metadata.offset = String(writeOffset);
       metadata.size = replacement.length;
       updateIntegrity(metadata, replacement);
+      parts.push(replacement);
+      writeOffset += replacement.length;
     }
-
-    readOffset = offset + size;
-    const bytes = replacement ?? original.data.subarray(offset, readOffset);
-    parts.push(bytes);
-    writeOffset += bytes.length;
   }
   parts.push(original.data.subarray(readOffset));
 

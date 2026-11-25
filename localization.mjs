@@ -24,6 +24,21 @@ const releasesByVersion = {
     ],
     sourceSuffix: '-2.34.0',
   },
+  '2.35.0': {
+    originalSha256: '99ff7f6cf1219f46c8437df65ca866e384836b5230adba8efd91b3152f823e15',
+    localizedSha256: 'dd28bc41e626ac22ce46a3db960617a9689d04c9a071c3a3cfd5a7cee5e15147',
+    legacySha256: [
+      '081a6cda424e0f374d94875d92b33d53bf72fa0eaea936e1885cb10bcb8b93f3',
+      '42ea64445d5d482df567ff1f5eac96fa0747e870fb8c5a33dad291246fb7daa4',
+      '97f8a9321c4153051d7bec14e831acf02e5f737644d6ccb08d4517786d0483a7',
+    ],
+    patchVersion: '2.35.1',
+  },
+  '2.35.1': {
+    originalSha256: '9f0aad7274795d7fbde04931d96b348dcfc5f3d81d7373e6b70aeb09307442df',
+    localizedSha256: '105f04df195b3294dd6d99edce299d39cc16eb893d0f1c2aa3ae9fa45fc89f6f',
+    legacySha256: ['35df2b85e2da79bbbc1f25aabe1fef128e78459d152f81c5d74f4b3a0b4a6d69'],
+  },
 };
 
 export const releases = Object.freeze(Object.entries(releasesByVersion).map(([version, release]) => Object.freeze({
@@ -46,12 +61,13 @@ export function buildLocalizedArchive(originalBuffer) {
     throw new Error('需要通过 SHA-256 校验的 Antigravity App Windows 原版 app.asar。');
   }
 
-  const suffix = releasesByVersion[release.version].sourceSuffix;
-  const patches = JSON.parse(readSource('./patches-' + release.version + '.json'));
-  const renderer = readSource('./renderer' + suffix + '.js')
+  const { sourceSuffix, patchVersion = release.version } = releasesByVersion[release.version];
+  const patches = JSON.parse(readSource('./patches-' + patchVersion + '.json'));
+  const renderer = sourceSuffix === undefined ? undefined : readSource('./renderer' + sourceSuffix + '.js')
     .trimEnd()
-    .replace('/* @dictionary */ {}', () => readSource('./dictionary' + suffix + '.json').trimEnd())
-    .replace('/* @core-words */ {}', () => readSource('./core-words' + suffix + '.json').trimEnd());
+    .replace('/* @dictionary */ {}', () => readSource('./dictionary' + sourceSuffix + '.json').trimEnd())
+    .replace('/* @core-words */ {}', () => readSource('./core-words' + sourceSuffix + '.json').trimEnd());
+  const appendedAssets = new Map();
 
   const archive = readAsar(originalBuffer);
   const replacements = new Map();
@@ -77,6 +93,13 @@ export function buildLocalizedArchive(originalBuffer) {
         ? renderer.replace('const requiresHubDocument = true;', 'const requiresHubDocument = false;')
         : renderer;
       chunks.push(Buffer.from(script));
+    }
+
+    for (const asset of patch.append ?? []) {
+      if (!appendedAssets.has(asset)) {
+        appendedAssets.set(asset, Buffer.from('\n\n' + readSource('./' + asset).trimEnd() + '\n'));
+      }
+      chunks.push(appendedAssets.get(asset));
     }
 
     replacements.set(path, Buffer.concat(chunks));
