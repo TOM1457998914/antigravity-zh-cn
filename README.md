@@ -1,5 +1,7 @@
 # Antigravity 简体中文补丁
 
+**[前往最新版发布页下载 Windows 补丁](https://github.com/TOM1457998914/antigravity-zh-cn/releases/latest)**
+
 适用于 Windows 版 **Google Antigravity App 2.33.0、2.34.0、2.35.0、2.35.1 和 2.35.2**。补丁覆盖菜单、设置、首次使用引导和对话控件。2.35 系列补齐了对话时间、模型档位、新建自动化表单、扩展市场及组合读写权限提示。第三方插件动态提供的部分内容可能仍显示英文。
 
 本仓库提供补丁源码和词库。工具按 SHA-256 识别安装版本，并使用本机的官方 `app.asar` 生成汉化文件。补丁只处理界面文案，AI 回复语言由对话和模型设置决定。
@@ -11,10 +13,16 @@
 ## 安装和更新后重新应用
 
 1. 确认已安装上面列出的 Windows 版 Antigravity 和 Node.js 20 或更新版本。 [Node.js 官方下载](https://nodejs.org/en/download)
-2. 下载并解压本仓库，或使用 Git 克隆。把补丁目录保存在 Antigravity 安装目录之外。 [GitHub 仓库](https://github.com/TOM1457998914/antigravity-zh-cn)
+2. 从发布页的下载区获取 `antigravity-zh-cn-v1.1.0-windows.zip` 和 `SHA256SUMS.txt`。核对校验值后解压，把补丁目录保存在 Antigravity 安装目录之外。 [最新版发布页](https://github.com/TOM1457998914/antigravity-zh-cn/releases/latest)
 3. 保存工作，从 Windows 系统托盘彻底退出 Antigravity。双击补丁目录内的 `apply-zh-cn.cmd`，看到「已安装简体中文界面」后重新打开 Antigravity。
 
-Antigravity 更新或重装时会重新写入应用归档。若更新后界面恢复英文，退出 Antigravity，再双击同一个 `apply-zh-cn.cmd`。脚本会根据当前归档的 SHA-256 选择对应补丁。遇到「当前归档不受支持」时，先查看 GitHub 上是否已经支持新版本，下载更新后的补丁再运行。可用下方 `status` 命令查看当前归档的 SHA-256，以及归档自报的版本。
+在 ZIP 所在目录打开 PowerShell，运行下面的命令，并将输出的 `Hash` 与 `SHA256SUMS.txt` 中同名文件的 SHA-256 值比较。
+
+```powershell
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\antigravity-zh-cn-v1.1.0-windows.zip'
+```
+
+Antigravity 更新或重装时会重新写入应用归档。若更新后界面恢复英文，退出 Antigravity，再双击同一个 `apply-zh-cn.cmd`。脚本会根据当前归档的 SHA-256 选择对应补丁。遇到「当前归档不受支持」时，可用下方的 `status` 命令查看归档 SHA-256 及可读取的自报版本，再到最新版发布页确认是否已支持此版本。 [最新版发布页](https://github.com/TOM1457998914/antigravity-zh-cn/releases/latest)
 
 ### 命令行和自定义安装目录
 
