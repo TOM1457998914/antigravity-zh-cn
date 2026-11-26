@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { releases } from './localization.mjs';
 
 const productionCli = fileURLToPath(new URL('./localize.mjs', import.meta.url));
-const testedVersions = ['2.33.0', '2.34.0', '2.35.0', '2.35.1'];
+const testedVersions = ['2.33.0', '2.34.0', '2.35.0', '2.35.1', '2.35.2'];
 const windowsOnly = { skip: process.platform !== 'win32' && 'Windows-only installation and process checks' };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
@@ -44,7 +44,7 @@ function makeArchive(version, label, localized = false) {
 
 async function createSandbox(t) {
   const temp = await realpath(tmpdir());
-  const root = await mkdtemp(join(temp, 'antigravity-zh-cn-test-'));
+  const root = await mkdtemp(join(temp, 'antigravity 汉化 test-'));
   t.after(async () => {
     const target = await realpath(root);
     assert.equal(target, root);
@@ -60,6 +60,7 @@ async function createSandbox(t) {
     root, localAppData, appDir, resources,
     archive: join(resources, 'app.asar'),
     backup: join(resources, 'app.asar.zh-cn.original'),
+    backups: join(localAppData, 'Antigravity-Localization', 'backups'),
     cli: productionCli,
     env: { ...process.env, LOCALAPPDATA: localAppData },
   };
@@ -73,8 +74,9 @@ async function createReleaseFixture(t) {
     const release = releases.find((entry) => entry.version === version);
     assert.ok(release);
     const original = makeArchive(version, 'Open');
-    const usesAppendedAsset = version === '2.35.0' || version === '2.35.1';
-    const localized = makeArchive(version, usesAppendedAsset ? '打开\n\n// fixture renderer\n' : '打开', true);
+    const usesAppendedAsset = version.startsWith('2.35.');
+    const menu = version === '2.35.2' ? '打开！' : '打开';
+    const localized = makeArchive(version, usesAppendedAsset ? menu + '\n\n// fixture renderer\n' : menu, true);
     const legacy = release.legacySha256.map((_, index) => makeArchive(version, 'Previous patch ' + index));
     const production = [release.originalSha256, release.localizedSha256, ...release.legacySha256];
     for (const [index, bytes] of [original, localized, ...legacy].entries()) {
@@ -88,8 +90,12 @@ async function createReleaseFixture(t) {
       patches['dist/menu.js'].append = ['fixture-renderer.js'];
       await writeFile(join(sandbox.root, 'fixture-renderer.js'), '// fixture renderer\n');
     }
-    const patchVersion = version === '2.35.0' ? '2.35.1' : version;
+    const patchVersion = usesAppendedAsset ? '2.35.1' : version;
     await writeFile(join(sandbox.root, 'patches-' + patchVersion + '.json'), JSON.stringify(patches));
+    if (version === '2.35.2') {
+      const supplemental = { 'dist/menu.js': { edits: [[4, 0, '！']] } };
+      await writeFile(join(sandbox.root, 'patches-2.35.2.json'), JSON.stringify(supplemental));
+    }
     if (!usesAppendedAsset) {
       const suffix = version === '2.33.0' ? '' : '-' + version;
       await Promise.all([
@@ -102,9 +108,11 @@ async function createReleaseFixture(t) {
 
   // Run an unchanged CLI and ASAR implementation with test-only release digests and patch data.
   sandbox.cli = join(sandbox.root, 'localize.mjs');
+  sandbox.launcher = join(sandbox.root, 'apply-zh-cn.cmd');
   await Promise.all([
     copyFile(new URL('./localize.mjs', import.meta.url), sandbox.cli),
     copyFile(new URL('./asar.mjs', import.meta.url), join(sandbox.root, 'asar.mjs')),
+    copyFile(new URL('./apply-zh-cn.cmd', import.meta.url), sandbox.launcher),
     writeFile(join(sandbox.root, 'localization.mjs'), source),
   ]);
   return { ...sandbox, fixtures };
@@ -120,6 +128,23 @@ function run(sandbox, status, command, ...args) {
   });
   assert.ifError(result.error);
   assert.equal(result.status, status, [command, result.stdout, result.stderr].join('\n'));
+  return result;
+}
+
+function runLauncher(sandbox, status, runtimePath, appDir) {
+  const args = appDir ? ` --app-dir "${appDir}"` : '';
+  const env = Object.fromEntries(Object.entries(sandbox.env).filter(([key]) => key.toLowerCase() !== 'path'));
+  const result = spawnSync(process.env.ComSpec, ['/d', '/s', '/c', `""${sandbox.launcher}"${args}"`], {
+    cwd: sandbox.resources,
+    env: { ...env, Path: runtimePath },
+    input: '\r\n',
+    encoding: 'utf8',
+    timeout: 35_000,
+    windowsHide: true,
+    windowsVerbatimArguments: true,
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, status, [result.stdout, result.stderr].join('\n'));
   return result;
 }
 
@@ -141,12 +166,15 @@ test('production release metadata recognizes the pinned official and localized d
       '9f0aad7274795d7fbde04931d96b348dcfc5f3d81d7373e6b70aeb09307442df',
       '105f04df195b3294dd6d99edce299d39cc16eb893d0f1c2aa3ae9fa45fc89f6f',
     ],
+    '2.35.2': [
+      'e057115571cf5085406d20f2427a5afac272b712ec84332c7157da0113d4b2d0',
+      '0cec75b17ba698987d4d76996fd3b34902d74ab75b51609a1f415e066e2aa4a4',
+    ],
   };
   for (const version of testedVersions) {
     const release = releases.find((entry) => entry.version === version);
     assert.ok(release, version);
     assert.deepEqual([release.originalSha256, release.localizedSha256], expected[version]);
-    assert.ok(release.legacySha256.length > 0, version);
   }
   const hashes = releases.flatMap(({ originalSha256, localizedSha256, legacySha256 }) => [
     originalSha256, localizedSha256, ...legacySha256,
@@ -162,7 +190,7 @@ test('CLI status distinguishes supported versions and their known archive states
     for (const [description, bytes] of [
       [/官方原版/, release.original],
       [/当前简体中文版/, release.localized],
-      [/此前本机汉化版/, release.legacy[0]],
+      ...release.legacy.map((bytes) => [/此前本机汉化版/, bytes]),
     ]) {
       await writeFile(sandbox.archive, bytes);
       const { stdout } = run(sandbox, 0, 'status', '--app-dir', sandbox.appDir);
@@ -182,6 +210,7 @@ test('production CLI refuses unknown digests even when the archive claims a supp
     const { stdout } = run(sandbox, 0, 'status');
     assert.match(stdout, /不支持的版本或未知改动/);
     assert.ok(stdout.includes(sha256(input)));
+    assert.ok(stdout.includes(`归档自报版本 ${version}（未经 SHA-256 验证）`));
     for (const command of ['apply', 'restore']) {
       const { stderr } = run(sandbox, 1, command);
       assert.match(stderr, /当前归档不受支持/);
@@ -208,52 +237,91 @@ test('CLI build selects the correct patch for each verified input and leaves it 
   }
 });
 
-test('Windows apply and restore preserve the original backup for each supported release', windowsOnly, async (t) => {
+test('Windows one-click apply survives a same-version reinstall and upgrade', windowsOnly, async (t) => {
   const sandbox = await createReleaseFixture(t);
-  const older = sandbox.fixtures.get('2.33.0');
-  const newer = sandbox.fixtures.get('2.34.0');
-  const versionedBackup = sandbox.backup + '.2.34.0';
+  const older = sandbox.fixtures.get('2.35.1');
+  const newer = sandbox.fixtures.get('2.35.2');
+  const olderBackup = join(sandbox.backups, '2.35.1', 'app.asar.original');
+  const newerBackup = join(sandbox.backups, '2.35.2', 'app.asar.original');
+  const nodeDirectory = dirname(process.execPath);
 
   await writeFile(sandbox.archive, older.original);
-  run(sandbox, 0, 'apply');
+  assert.match(runLauncher(sandbox, 0, nodeDirectory).stdout, /已安装简体中文界面/);
   assert.deepEqual(await readFile(sandbox.archive), older.localized);
-  assert.deepEqual(await readFile(sandbox.backup), older.original);
-  run(sandbox, 0, 'restore');
-  assert.deepEqual(await readFile(sandbox.archive), older.original);
+  assert.deepEqual(await readFile(olderBackup), older.original);
+  assert.deepEqual(await readdir(sandbox.resources), ['app.asar']);
 
-  // Simulate an official update inside the fixture without replacing its existing backup.
+  await writeFile(sandbox.archive, older.original);
+  assert.match(runLauncher(sandbox, 0, nodeDirectory).stdout, /已安装简体中文界面/);
+  assert.deepEqual(await readFile(sandbox.archive), older.localized);
+  assert.deepEqual(await readFile(olderBackup), older.original);
+
   await writeFile(sandbox.archive, newer.original);
-  run(sandbox, 0, 'apply');
+  assert.match(runLauncher(sandbox, 0, nodeDirectory).stdout, /已安装简体中文界面/);
   assert.deepEqual(await readFile(sandbox.archive), newer.localized);
-  assert.deepEqual(await readFile(sandbox.backup), older.original);
-  assert.deepEqual(await readFile(versionedBackup), newer.original);
+  assert.deepEqual(await readFile(olderBackup), older.original);
+  assert.deepEqual(await readFile(newerBackup), newer.original);
   run(sandbox, 0, 'restore');
   assert.deepEqual(await readFile(sandbox.archive), newer.original);
-  assert.deepEqual(await readFile(sandbox.backup), older.original);
-  assert.deepEqual(await readFile(versionedBackup), newer.original);
+  assert.deepEqual(await readFile(newerBackup), newer.original);
 });
 
-test('Windows restore rejects a mismatched backup and apply can use a verified legacy backup', windowsOnly, async (t) => {
+test('Windows one-click apply supports a portable Node.js and a custom install directory', windowsOnly, async (t) => {
+  const sandbox = await createReleaseFixture(t);
+  const { original, localized } = sandbox.fixtures.get('2.35.2');
+  const appDir = join(sandbox.root, 'Antigravity 自定义目录');
+  const resources = join(appDir, 'resources');
+  const archive = join(resources, 'app.asar');
+  await mkdir(resources, { recursive: true });
+  await writeFile(archive, original);
+
+  assert.match(runLauncher(sandbox, 1, '', appDir).stderr, /Node\.js 20 or later/);
+  assert.deepEqual(await readFile(archive), original);
+
+  const portableNode = join(sandbox.localAppData, 'Antigravity-Localization', 'node', 'node.exe');
+  await mkdir(dirname(portableNode), { recursive: true });
+  await copyFile(process.execPath, portableNode);
+  assert.match(runLauncher(sandbox, 0, '', appDir).stdout, /已安装简体中文界面/);
+  assert.deepEqual(await readFile(archive), localized);
+  await assert.rejects(readFile(sandbox.archive), { code: 'ENOENT' });
+});
+
+test('Windows verifies and migrates an old installation-directory backup', windowsOnly, async (t) => {
   const sandbox = await createReleaseFixture(t);
   const older = sandbox.fixtures.get('2.33.0');
   const newer = sandbox.fixtures.get('2.35.1');
-  const legacyBackupDir = join(sandbox.localAppData, 'Antigravity-Localization', 'backups', '2.35.1');
-  const legacyBackup = join(legacyBackupDir, 'app.asar.original');
+  const durableBackup = join(sandbox.backups, '2.35.1', 'app.asar.original');
 
   await writeFile(sandbox.archive, newer.legacy[0]);
   await writeFile(sandbox.backup, older.original);
   assert.match(run(sandbox, 1, 'restore').stderr, /找不到通过 SHA-256 校验的 2\.35\.1 原版备份/);
   assert.deepEqual(await readFile(sandbox.archive), newer.legacy[0]);
 
-  await mkdir(legacyBackupDir, { recursive: true });
-  await writeFile(legacyBackup, newer.original);
+  await writeFile(sandbox.backup + '.2.35.1', newer.original);
   run(sandbox, 0, 'apply');
   assert.deepEqual(await readFile(sandbox.archive), newer.localized);
   assert.deepEqual(await readFile(sandbox.backup), older.original);
-  assert.deepEqual(await readFile(sandbox.backup + '.2.35.1'), newer.original);
+  assert.deepEqual(await readFile(durableBackup), newer.original);
   run(sandbox, 0, 'restore');
   assert.deepEqual(await readFile(sandbox.archive), newer.original);
-  assert.deepEqual(await readFile(legacyBackup), newer.original);
+  assert.deepEqual(await readFile(durableBackup), newer.original);
+});
+
+test('Windows keeps existing backup files when migrating an already-localized installation', windowsOnly, async (t) => {
+  const sandbox = await createReleaseFixture(t);
+  const { original, localized } = sandbox.fixtures.get('2.35.1');
+  const durableBackup = join(sandbox.backups, '2.35.1', 'app.asar.original');
+  const hashBackup = durableBackup + '.' + sha256(original);
+  const mismatchedBackup = Buffer.from('unexpected content');
+  await mkdir(dirname(durableBackup), { recursive: true });
+  await writeFile(durableBackup, mismatchedBackup);
+  await writeFile(sandbox.backup, original);
+  await writeFile(sandbox.archive, localized);
+  assert.match(run(sandbox, 0, 'apply').stdout, /当前已是简体中文版/);
+  assert.deepEqual(await readFile(sandbox.archive), localized);
+  assert.deepEqual(await readFile(sandbox.backup), original);
+  assert.deepEqual(await readFile(durableBackup), mismatchedBackup);
+  assert.deepEqual(await readFile(hashBackup), original);
 });
 
 test('Windows apply and restore refuse to write while a process from the fixture directory runs', windowsOnly, async (t) => {

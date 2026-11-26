@@ -39,6 +39,13 @@ const releasesByVersion = {
     localizedSha256: '105f04df195b3294dd6d99edce299d39cc16eb893d0f1c2aa3ae9fa45fc89f6f',
     legacySha256: ['35df2b85e2da79bbbc1f25aabe1fef128e78459d152f81c5d74f4b3a0b4a6d69'],
   },
+  '2.35.2': {
+    originalSha256: 'e057115571cf5085406d20f2427a5afac272b712ec84332c7157da0113d4b2d0',
+    localizedSha256: '0cec75b17ba698987d4d76996fd3b34902d74ab75b51609a1f415e066e2aa4a4',
+    legacySha256: [],
+    patchVersion: '2.35.1',
+    supplementalPatch: '2.35.2',
+  },
 };
 
 export const releases = Object.freeze(Object.entries(releasesByVersion).map(([version, release]) => Object.freeze({
@@ -55,14 +62,30 @@ export const localizedSha256 = releasesByVersion[supportedVersion].localizedSha2
 const readSource = name => readFileSync(new URL(name, import.meta.url), 'utf8');
 const sha256 = data => createHash('sha256').update(data).digest('hex');
 
+function readPatches(patchVersion, supplementalPatch) {
+  const patches = JSON.parse(readSource('./patches-' + patchVersion + '.json'));
+  if (supplementalPatch === undefined) return patches;
+
+  const supplemental = JSON.parse(readSource('./patches-' + supplementalPatch + '.json'));
+  for (const [path, patch] of Object.entries(supplemental)) {
+    const base = patches[path];
+    patches[path] = {
+      ...base,
+      edits: [...(base?.edits ?? []), ...patch.edits].sort(([first], [second]) => first - second),
+      append: [...(base?.append ?? []), ...(patch.append ?? [])],
+    };
+  }
+  return patches;
+}
+
 export function buildLocalizedArchive(originalBuffer) {
   const release = releases.find(candidate => candidate.originalSha256 === sha256(originalBuffer));
   if (!release) {
     throw new Error('需要通过 SHA-256 校验的 Antigravity App Windows 原版 app.asar。');
   }
 
-  const { sourceSuffix, patchVersion = release.version } = releasesByVersion[release.version];
-  const patches = JSON.parse(readSource('./patches-' + patchVersion + '.json'));
+  const { sourceSuffix, patchVersion = release.version, supplementalPatch } = releasesByVersion[release.version];
+  const patches = readPatches(patchVersion, supplementalPatch);
   const renderer = sourceSuffix === undefined ? undefined : readSource('./renderer' + sourceSuffix + '.js')
     .trimEnd()
     .replace('/* @dictionary */ {}', () => readSource('./dictionary' + sourceSuffix + '.json').trimEnd())

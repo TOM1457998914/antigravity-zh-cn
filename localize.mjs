@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process';
 import { constants } from 'node:fs';
-import { copyFile, link, mkdtemp, open, readFile, realpath, rename, rmdir, unlink } from 'node:fs/promises';
+import { copyFile, link, mkdir, mkdtemp, open, readFile, realpath, rename, rmdir, unlink } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { dirname, join, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
+import { readAsar } from './asar.mjs';
 import { buildLocalizedArchive, releases } from './localization.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -57,15 +58,23 @@ function pathsFor(appDir) {
     directory,
     archive: join(resources, 'app.asar'),
     backup: join(resources, 'app.asar.zh-cn.original'),
-    legacyBackups: local ? resolve(local, 'Antigravity-Localization', 'backups') : null,
+    backupDirectory: local ? resolve(local, 'Antigravity-Localization', 'backups') : null,
   };
 }
 
+function applicationBackupFiles(paths, release) {
+  return [paths.backup, `${paths.backup}.${release.version}`];
+}
+
+function preferredBackupFiles(paths, release) {
+  if (!paths.backupDirectory) return applicationBackupFiles(paths, release);
+  const original = join(paths.backupDirectory, release.version, 'app.asar.original');
+  return [original, `${original}.${release.originalSha256}`];
+}
+
 function backupFiles(paths, release) {
-  const localFiles = [paths.backup, `${paths.backup}.${release.version}`];
-  return paths.legacyBackups
-    ? [...localFiles, join(paths.legacyBackups, release.version, 'app.asar.original')]
-    : localFiles;
+  const preferred = preferredBackupFiles(paths, release);
+  return paths.backupDirectory ? [...preferred, ...applicationBackupFiles(paths, release)] : preferred;
 }
 
 function hash(bytes) {
@@ -90,6 +99,17 @@ async function archiveAt(file) {
 
 function archiveState(archive) {
   return statesByHash.get(archive.sha256) ?? unknownArchive;
+}
+
+function reportedVersion(archive) {
+  try {
+    const info = JSON.parse(readAsar(archive.bytes).readFile('package.json')?.toString('utf8'));
+    return typeof info.version === 'string' && /^\d{1,5}\.\d{1,5}\.\d{1,5}(?:-[a-z0-9.-]{1,40})?$/i.test(info.version)
+      ? `归档自报版本 ${info.version}（未经 SHA-256 验证）。`
+      : '';
+  } catch {
+    return '';
+  }
 }
 
 function verifyOriginal(archive, file) {
@@ -150,12 +170,12 @@ async function writeNewFile(target, bytes) {
 }
 
 async function ensureBackup(paths, release, original) {
-  const localFiles = backupFiles(paths, release).slice(0, 2);
-  const existing = await findOriginalBackup(paths, release);
-  if (existing && localFiles.includes(existing.file)) return existing;
-
-  for (const file of localFiles) {
-    if (await existingFile(file)) continue;
+  const preferred = preferredBackupFiles(paths, release);
+  await mkdir(dirname(preferred[0]), { recursive: true });
+  for (const file of preferred) {
+    const existing = await existingFile(file);
+    if (isOriginalFor(existing, release)) return { ...existing, file };
+    if (existing) continue;
     try {
       await writeNewFile(file, original.bytes);
     } catch (error) {
@@ -165,7 +185,7 @@ async function ensureBackup(paths, release, original) {
     if (isOriginalFor(saved, release)) return { ...saved, file };
   }
 
-  return requireOriginalBackup(paths, release);
+  throw new Error(`无法保存 ${release.version} 原版备份。以下备份位置已有其他内容：${preferred.join('、')}。`);
 }
 
 async function requireClosed(directory) {
@@ -222,12 +242,15 @@ async function inspect(paths) {
   console.log(`${descriptions[state]} — ${paths.archive}`);
   console.log(`SHA-256 ${current.sha256}`);
   if (!release) {
-    console.log('未识别当前归档版本，无法匹配原版备份。');
+    const version = reportedVersion(current);
+    if (version) console.log(version);
+    console.log(`当前归档无法使用此版本的补丁。请检查项目是否已发布支持此版本的补丁。当前支持 ${supportedVersions}。`);
     return;
   }
   console.log(`Antigravity ${release.version}`);
   const backup = await findOriginalBackup(paths, release);
   console.log(backup ? `已验证的原版备份 — ${backup.file}` : '暂无通过校验的原版备份。');
+  if (state === 'original') console.log('退出 Antigravity 后，双击 apply-zh-cn.cmd 安装或重新应用汉化。');
 }
 
 async function installOrRestore(command, paths) {
@@ -235,10 +258,21 @@ async function installOrRestore(command, paths) {
   const { state, release } = archiveState(current);
   const installing = command === 'apply';
   if (!release) {
-    throw new Error(`当前归档不受支持（SHA-256 ${current.sha256}）。本工具仅支持已校验的 Antigravity ${supportedVersions} 归档。`);
+    throw new Error(`当前归档不受支持（SHA-256 ${current.sha256}）。${reportedVersion(current)}本工具仅支持已校验的 Antigravity ${supportedVersions} 归档。请检查项目是否已发布支持此版本的补丁。`);
   }
-  if ((installing && state === 'localized') || (!installing && state === 'original')) {
-    console.log(installing ? '当前已是简体中文版。' : '当前已是官方原版。');
+  if (installing && state === 'localized') {
+    console.log('当前已是简体中文版。');
+    const original = await findOriginalBackup(paths, release);
+    if (!original) {
+      console.log('未找到通过校验的原版备份。');
+      return;
+    }
+    const backup = await ensureBackup(paths, release, original);
+    console.log(`原版备份 — ${backup.file}`);
+    return;
+  }
+  if (!installing && state === 'original') {
+    console.log('当前已是官方原版。');
     return;
   }
 

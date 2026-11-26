@@ -1,0 +1,39 @@
+{
+  "dist/preload.js": {
+    "edits": [],
+    "append": ["renderer-2.35.2.js"]
+  },
+  "dist/cablev2.js": {
+    "edits": [
+      [50313,9,"lang=\"zh-CN\""]
+    ]
+  },
+  "dist/ideInstall/wizardHtml.js": {
+    "edits": [
+      [488,9,"lang=\"zh-CN\""],
+      [5489,16,"Antigravity 图标"]
+    ]
+  },
+  "dist/main.js": {
+    "edits": [
+      [21929,36,"在以下路径找不到语言服务程序："],
+      [22000,34,"请构建语言服务程序或指定有效路径。"],
+      [23966,45,"无法将服务端安装到 WSL 发行版 "]
+    ]
+  },
+  "dist/remote/disconnectedPage.js": {
+    "edits": [
+      [4538,9,"lang=\"zh-CN\""]
+    ]
+  },
+  "dist/remote/signInCallback.js": {
+    "edits": [
+      [10118,9,"lang=\"zh-CN\""]
+    ]
+  },
+  "dist/remote/sshPrompts.js": {
+    "edits": [
+      [12104,9,"lang=\"zh-CN\""]
+    ]
+  }
+}
