@@ -46,6 +46,13 @@ const releasesByVersion = {
     patchVersion: '2.35.1',
     supplementalPatch: '2.35.2',
   },
+  '2.36.0': {
+    originalSha256: 'd2bc25eab00f2ff6f14395e45f13347eef605af5a63f28db7edbfd2ab42a7571',
+    localizedSha256: '7c62be44a0a91253004e4b7083a5375cfad80d3ae00425242412c4783d5f5582',
+    legacySha256: [],
+    patchVersion: '2.35.1',
+    supplementalPatch: '2.35.2',
+  },
 };
 
 export const releases = Object.freeze(Object.entries(releasesByVersion).map(([version, release]) => Object.freeze({

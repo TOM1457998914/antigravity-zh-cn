@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { releases } from './localization.mjs';
 
 const productionCli = fileURLToPath(new URL('./localize.mjs', import.meta.url));
-const testedVersions = ['2.33.0', '2.34.0', '2.35.0', '2.35.1', '2.35.2'];
+const testedVersions = ['2.33.0', '2.34.0', '2.35.0', '2.35.1', '2.35.2', '2.36.0'];
 const windowsOnly = { skip: process.platform !== 'win32' && 'Windows-only installation and process checks' };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
@@ -74,8 +74,9 @@ async function createReleaseFixture(t) {
     const release = releases.find((entry) => entry.version === version);
     assert.ok(release);
     const original = makeArchive(version, 'Open');
-    const usesAppendedAsset = version.startsWith('2.35.');
-    const menu = version === '2.35.2' ? '打开！' : '打开';
+    const usesAppendedAsset = version !== '2.33.0' && version !== '2.34.0';
+    const usesSupplementalPatch = version === '2.35.2' || version === '2.36.0';
+    const menu = usesSupplementalPatch ? '打开！' : '打开';
     const localized = makeArchive(version, usesAppendedAsset ? menu + '\n\n// fixture renderer\n' : menu, true);
     const legacy = release.legacySha256.map((_, index) => makeArchive(version, 'Previous patch ' + index));
     const production = [release.originalSha256, release.localizedSha256, ...release.legacySha256];
@@ -170,6 +171,10 @@ test('production release metadata recognizes the pinned official and localized d
       'e057115571cf5085406d20f2427a5afac272b712ec84332c7157da0113d4b2d0',
       '0cec75b17ba698987d4d76996fd3b34902d74ab75b51609a1f415e066e2aa4a4',
     ],
+    '2.36.0': [
+      'd2bc25eab00f2ff6f14395e45f13347eef605af5a63f28db7edbfd2ab42a7571',
+      '7c62be44a0a91253004e4b7083a5375cfad80d3ae00425242412c4783d5f5582',
+    ],
   };
   for (const version of testedVersions) {
     const release = releases.find((entry) => entry.version === version);
@@ -239,10 +244,10 @@ test('CLI build selects the correct patch for each verified input and leaves it 
 
 test('Windows one-click apply survives a same-version reinstall and upgrade', windowsOnly, async (t) => {
   const sandbox = await createReleaseFixture(t);
-  const older = sandbox.fixtures.get('2.35.1');
-  const newer = sandbox.fixtures.get('2.35.2');
-  const olderBackup = join(sandbox.backups, '2.35.1', 'app.asar.original');
-  const newerBackup = join(sandbox.backups, '2.35.2', 'app.asar.original');
+  const older = sandbox.fixtures.get('2.35.2');
+  const newer = sandbox.fixtures.get('2.36.0');
+  const olderBackup = join(sandbox.backups, '2.35.2', 'app.asar.original');
+  const newerBackup = join(sandbox.backups, '2.36.0', 'app.asar.original');
   const nodeDirectory = dirname(process.execPath);
 
   await writeFile(sandbox.archive, older.original);
